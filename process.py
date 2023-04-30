@@ -93,7 +93,7 @@ class UtteranceFactory():
           raise NotImplementedError
 
         token = self.vocab.lookup_token(pred)
-        if token == END_TOKEN:
+        if token == self.end_token:
           ended[i] = True
           continue
         tokens[i].append(token)
