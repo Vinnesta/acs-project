@@ -259,7 +259,7 @@ class SpeakerProcess():
     
 
 class PragmaticProcess():
-  def pragmatic_eval(dataloader, l0_model, s0_model, metrics_fn, rsa, num_l2_repeats=8, orig_colour_order=False):
+  def pragmatic_eval(dataloader, l0_model, s0_model, vocab, metrics_fn, rsa, num_l2_repeats=8, orig_colour_order=False):
     # Fix the random seed for reproducibility
     random.seed(42)
     
