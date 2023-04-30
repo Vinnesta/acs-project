@@ -1,4 +1,5 @@
 from PIL import Image, ImageDraw
+import re
 
 class ColoursUtil():
   def hsl_to_hsv(hsl):
@@ -29,7 +30,7 @@ class ColoursUtil():
     Args:
       `hsl`: HSL colours where h in [0, 360], s in [0, 100], and l in [0, 100]
     '''
-    im = Image.new('HSV', (50, 50), color=hsl_to_hsv(hsl))
+    im = Image.new('HSV', (50, 50), color=ColoursUtil.hsl_to_hsv(hsl))
     im.show()
     print(f"{hsl} \n")
 
@@ -41,7 +42,7 @@ class ColoursUtil():
     num_colours = colours.shape[0]
     height = int(50/num_colours)
     for i in range(num_colours):
-      im = Image.new('HSV', (50, height), color=hsl_to_hsv(colours[i].tolist()))
+      im = Image.new('HSV', (50, height), color=ColoursUtil.hsl_to_hsv(colours[i].tolist()))
       im.show()
   
   # https://github.com/futurulus/coop-nets
@@ -62,7 +63,7 @@ class ColoursUtil():
     assert len(colors.shape) == 3, colors.shape
     assert colors.shape[2] == 3, colors.shape
 
-    ranges = np.array(RANGES_HSV)
+    ranges = np.array(ColoursUtil.RANGES_HSV)
     color_0_1 = colors / (ranges - 1.0)
 
     # Using a Fourier representation causes colors at the boundary of the
@@ -106,19 +107,19 @@ class Tokeniser():
   WORD_RE = re.compile(r"(%s)" % WORD_RE_STR, re.VERBOSE | re.I | re.UNICODE)
 
   def basic_unigram_tokenizer(s, lower=True):
-      words = WORD_RE.findall(s)
+      words = Tokeniser.WORD_RE.findall(s)
       if lower:
           words = [w.lower() for w in words]
       return words
 
   def heuristic_ending_tokenizer(s, lower=True):
-      words = basic_unigram_tokenizer(s, lower=lower)
-      return [seg for w in words for seg in heuristic_segmenter(w)]
+      words = Tokeniser.basic_unigram_tokenizer(s, lower=lower)
+      return [seg for w in words for seg in Tokeniser.heuristic_segmenter(w)]
 
   ENDINGS = ['er', 'est', 'ish']
 
   def heuristic_segmenter(word):
-      for ending in ENDINGS:
+      for ending in Tokeniser.ENDINGS:
           if word.endswith(ending):
               return [word[:-len(ending)], '+' + ending]
       return [word]
