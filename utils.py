@@ -4,6 +4,7 @@ import re
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
+from torchtext.vocab import build_vocab_from_iterator
 
 class ColoursUtil():
   def hsl_to_hsv(hsl):
@@ -128,7 +129,18 @@ class Tokeniser():
               return [word[:-len(ending)], '+' + ending]
       return [word]
       
-      
+  def yield_tokens(data_iter):
+    for text in data_iter:
+        yield Tokeniser.heuristic_ending_tokenizer(text)
+        
+  def create_vocab(df, min_freq, start_token, end_token):
+    pad_token = "<pad>"
+    unk_token = "<unk>"
+    vocab = build_vocab_from_iterator(Tokeniser.yield_tokens(df['allSpeakerContents']), specials=[pad_token, unk_token, start_token, end_token], min_freq=min_freq)
+    vocab.set_default_index(vocab[unk_token])
+    return vocab
+
+
 class ColourDataset(Dataset):
   def __init__(self, x, c, y, colour_vector_dim):
     self.x = x
