@@ -16,7 +16,7 @@ class UtteranceFactory():
     self.end_token = end_token
     self.vocab = vocab
   
-  def generate_utterance(self, model, c_vec, method=GenerationMethod.GREEDY, return_index=False):
+  def generate_utterance(self, model, c_vec, method=GenerationMethod.SAMPLE, return_index=False):
     '''
       `c_vec`: colour vectors tensor of dim (N, 3, COLOUR_VECTOR_DIM)
       `return_index`: if True, returns the token indices based on `vocab` instead of the token strings
@@ -53,7 +53,7 @@ class UtteranceFactory():
       next_token = torch.unsqueeze(torch.tensor([pred]), dim=0)
     return tokens
 
-  def generate_utterances(self, model, c_vec, method=GenerationMethod.GREEDY, return_index=False):
+  def generate_utterances(self, model, c_vec, method=GenerationMethod.SAMPLE, return_index=False):
     num_samples = c_vec.shape[0]
     model.eval()
 
@@ -256,3 +256,5 @@ class SpeakerProcess():
       gen_accuracy = SpeakerProcess.eval(model, l0_model, val_dataloader, utterance_factory)
       print(f'[Epoch {epoch+1}] Metrics - Train Loss: {train_loss:.4f}; L0 Val Accuracy: {gen_accuracy:.4f}')
     return gen_accuracy
+    
+    
