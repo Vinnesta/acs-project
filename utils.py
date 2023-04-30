@@ -133,9 +133,7 @@ class Tokeniser():
     for text in data_iter:
         yield Tokeniser.heuristic_ending_tokenizer(text)
         
-  def create_vocab(df, min_freq, start_token, end_token):
-    pad_token = "<pad>"
-    unk_token = "<unk>"
+  def create_vocab(df, min_freq, pad_token, unk_token, start_token, end_token):
     vocab = build_vocab_from_iterator(Tokeniser.yield_tokens(df['allSpeakerContents']), specials=[pad_token, unk_token, start_token, end_token], min_freq=min_freq)
     vocab.set_default_index(vocab[unk_token])
     return vocab
