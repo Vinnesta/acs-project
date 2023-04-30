@@ -257,4 +257,45 @@ class SpeakerProcess():
       print(f'[Epoch {epoch+1}] Metrics - Train Loss: {train_loss:.4f}; L0 Val Accuracy: {gen_accuracy:.4f}')
     return gen_accuracy
     
+
+class PragmaticProcess():
+  def pragmatic_eval(dataloader, l0_model, s0_model, metrics_fn, rsa, num_l2_repeats=8, orig_colour_order=False):
+    # Fix the random seed for reproducibility
+    random.seed(42)
     
+    l0_model.eval()
+    s0_model.eval()
+
+    total = 0
+    l0_correct = 0
+    l2_correct = 0
+    for (batch_x, batch_c_vec, batch_hsl), _ in dataloader:
+      num_samples = batch_x.shape[0]
+      total += num_samples
+      
+      # L0 Accuracy
+      y_hat = l0_model(batch_x, batch_c_vec)
+      metrics = metrics_fn(y_hat)
+      correct_pred = metrics[0]
+      l0_correct += correct_pred
+      
+      for i in range(num_samples):
+        x = batch_x[i]
+        c_vec = torch.unsqueeze(batch_c_vec[i], dim=0)
+        if orig_colour_order:
+          # Original speaker model expects the target colour to be the last element of c_vec
+          c_vec = c_vec[:, [2, 1, 0]]
+        length = torch.count_nonzero(x)
+        tokens = vocab.lookup_tokens(x[:length].tolist())
+        l2_choice = np.zeros(3)
+        for _ in range(num_l2_repeats):
+          l2_choice = rsa.pragmatic_listener(tokens, c_vec, l0_model, s0_model, orig_colour_order)
+        if np.argmax(l2_choice) == 0:
+          l2_correct += 1
+      if int(total/num_samples) % 1 == 0:
+        print(f"{total} samples processed, {l0_correct} l0 correct, {l2_correct} l2 correct")
+        
+    l0_accuracy = l0_correct / total
+    l2_accuracy = l2_correct / total
+    print(f"L0 Accuracy: {l0_accuracy:.3f}, L2 Accuracy: {l2_accuracy:.3f}")
+    return l0_accuracy, l2_accuracy
