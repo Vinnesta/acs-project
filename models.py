@@ -114,3 +114,57 @@ class LiteralSpeaker(nn.Module):
       total_loss += loss.data
     optimiser.step()
     return total_loss
+    
+    
+class OriginalLiteralSpeaker(nn.Module):
+  def __init__(self, embedding_dim, hidden_dim, vocab_size):
+    super(OriginalLiteralSpeaker, self).__init__()
+    
+    # LSTM for representations of colours in context
+    self.colours_lstm = nn.LSTM(COLOUR_VECTOR_DIM, hidden_dim, batch_first=True)
+    
+    # Layers for generating utterances
+    self.word_embeddings = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
+    lstm_input_size = embedding_dim + hidden_dim
+    self.utterance_lstm = nn.LSTM(lstm_input_size, hidden_dim, batch_first=True)
+    self.linear = nn.Linear(hidden_dim, vocab_size)
+    
+  def forward(self, x, c_vec, h_0=None, c_0=None):
+    _, (_, colours_c_n) = self.colours_lstm(c_vec)
+    colours_rep = colours_c_n[-1]
+
+    embeds = self.word_embeddings(x)
+    seq_len = embeds.shape[1]
+    # Concatenate colour representation to the embeddings of each token
+    utterance_input = torch.cat((colours_rep.unsqueeze(1).expand(-1, seq_len, -1), embeds), dim=-1)
+
+    if h_0 is None or c_0 is None:
+      lstm_out, (h_n, c_n) = self.utterance_lstm(utterance_input)
+    else:
+      lstm_out, (h_n, c_n) = self.utterance_lstm(utterance_input, (h_0, c_0))
+    y_hat = []
+    for i in range(lstm_out.shape[1]):
+      h_i = lstm_out[:, i]
+      y_hat.append(self.linear(h_i))
+    return y_hat, (h_n, c_n)
+
+  def train_model(self, inputs, y, optimiser):
+    x = inputs[0]
+    c_vec = inputs[1]
+
+    self.train()
+    optimiser.zero_grad()
+    y_hat, _ = self(x, c_vec)
+    total_loss = 0
+    for i, y_hat_i in enumerate(y_hat):
+      # For the current timestep, which samples in the batch still have non-padded values?
+      nonzero_samples = y[:, i].nonzero(as_tuple=True)[0]
+      if nonzero_samples.numel() == 0:
+        break
+
+      # Only calculate loss for the non-padded values
+      loss = F.cross_entropy(y_hat_i[nonzero_samples], y[nonzero_samples, i])
+      loss.backward(retain_graph=True)
+      total_loss += loss.data
+    optimiser.step()
+    return total_loss
