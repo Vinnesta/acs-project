@@ -8,14 +8,15 @@ from torch.nn.utils.rnn import pack_padded_sequence
 class LiteralListener(nn.Module):
   def __init__(self, embedding_dim, hidden_dim, colour_vector_dim, vocab_size, dropout=0.0):
     super(LiteralListener, self).__init__()
+    self.colour_vector_dim = colour_vector_dim
 
     self.word_embeddings = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
     self.embedding_dropout = nn.Dropout(p=dropout)
     self.lstm = nn.LSTM(embedding_dim, hidden_dim, batch_first=True)
     self.lstm_dropout = nn.Dropout(p=dropout)
-    self.description_representation = nn.Linear(hidden_dim, colour_vector_dim)
+    self.description_representation = nn.Linear(hidden_dim, self.colour_vector_dim)
     self.rep_dropout = nn.Dropout(p=dropout)
-    self.covariance = nn.Linear(hidden_dim, colour_vector_dim*colour_vector_dim)
+    self.covariance = nn.Linear(hidden_dim, self.colour_vector_dim*self.colour_vector_dim)
 
   def forward(self, x, c_vec):
     embeds = self.word_embeddings(x)
@@ -27,7 +28,7 @@ class LiteralListener(nn.Module):
     rep = self.description_representation(final_out)
     rep = self.rep_dropout(rep)
     cov_vector = self.covariance(final_out)
-    cov_matrix = torch.reshape(cov_vector, (cov_vector.shape[0], colour_vector_dim, colour_vector_dim))
+    cov_matrix = torch.reshape(cov_vector, (cov_vector.shape[0], self.colour_vector_dim, self.colour_vector_dim))
     
     scores = []
     for i in range(3):
