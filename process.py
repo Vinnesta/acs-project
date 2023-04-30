@@ -9,11 +9,12 @@ class GenerationMethod(Enum):
   SAMPLE = 3
 
 class UtteranceFactory():
-  def __init__(self, max_seq_len, pad_token, start_token, end_token):
+  def __init__(self, max_seq_len, pad_token, start_token, end_token, vocab):
     self.max_seq_len = max_seq_len
     self.pad_token = pad_token
     self.start_token = start_token
     self.end_token = end_token
+    self.vocab = vocab
   
   def generate_utterance(self, model, c_vec, method=GenerationMethod.GREEDY, return_index=False):
     '''
@@ -21,7 +22,7 @@ class UtteranceFactory():
       `return_index`: if True, returns the token indices based on `vocab` instead of the token strings
     '''
     num_samples = c_vec.shape[0]
-    start = torch.tensor(vocab([self.start_token]))
+    start = torch.tensor(self.vocab([self.start_token]))
     start = start.repeat((num_samples, 1))
     next_token = start
     model.eval()
@@ -41,7 +42,7 @@ class UtteranceFactory():
       else:
         raise NotImplementedError
       
-      token = vocab.lookup_token(pred)
+      token = self.vocab.lookup_token(pred)
       if token == self.end_token:
         break
       
@@ -56,7 +57,7 @@ class UtteranceFactory():
     num_samples = c_vec.shape[0]
     model.eval()
 
-    preds = [vocab([self.start_token]) for _ in range(num_samples)]
+    preds = [self.vocab([self.start_token]) for _ in range(num_samples)]
     tokens = [[] for _ in range(num_samples)]
     ended = [False for _ in range(num_samples)]
 
@@ -72,12 +73,12 @@ class UtteranceFactory():
       vocab_len = prob.shape[1]
       
       # Always set the probability of PAD_TOKEN to 0
-      pad_token_idx = vocab.__getitem__(self.pad_token)
+      pad_token_idx = self.vocab.__getitem__(self.pad_token)
       prob[:, pad_token_idx] = 0
       
       # Set the probability of END_TOKEN to 0 if this is the first round of generation so as to avoid null utterances
       if len(tokens[0]) == 0:
-        end_token_idx = vocab.__getitem__(self.end_token)
+        end_token_idx = self.vocab.__getitem__(self.end_token)
         prob[:, end_token_idx] = 0
 
       for i in range(num_samples):
@@ -91,7 +92,7 @@ class UtteranceFactory():
         else:
           raise NotImplementedError
 
-        token = vocab.lookup_token(pred)
+        token = self.vocab.lookup_token(pred)
         if token == END_TOKEN:
           ended[i] = True
           continue
