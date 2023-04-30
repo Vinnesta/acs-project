@@ -203,7 +203,7 @@ class ListenerProcess():
     
     
 class SpeakerProcess():
-  def eval(s0_model, l0_model, speaker_dataloader, num_sampled_utt=10):
+  def eval(s0_model, l0_model, speaker_dataloader, utterance_factory, num_sampled_utt=8):
     total_samples = 0
     gen_correct = 0
     for (batch_x, batch_c_vec, _), _ in speaker_dataloader:
@@ -212,7 +212,7 @@ class SpeakerProcess():
       
       # Duplicate c_vec to repeat the utterance sampling process by `num_sampled_utt` times
       c_vec = batch_c_vec.repeat((num_sampled_utt, 1, 1))
-      generated_utts = generate_utterances(s0_model, c_vec, method=GenerationMethod.SAMPLE, return_index=True)
+      generated_utts = utterance_factory.generate_utterances(s0_model, c_vec, method=GenerationMethod.SAMPLE, return_index=True)
       
       # Pad the generated utterances so it can be fed to the listener model as a batch
       max_utt_len = max(len(utt) for utt in generated_utts)
@@ -226,7 +226,7 @@ class SpeakerProcess():
     gen_accuracy = gen_correct / (total_samples * num_sampled_utt)
     return gen_accuracy
 
-  def train_eval(train_dataloader, val_dataloader, model, l0_model, optimiser, epochs):
+  def train_eval(train_dataloader, val_dataloader, model, l0_model, optimiser, epochs, utterance_factory):
     # Evaluate L0 listener accuracy on the groundtruth utterances
     l0_correct = 0
     val_samples = 0
@@ -251,6 +251,6 @@ class SpeakerProcess():
       # Compute metrics for this epoch
       if train_samples > 0:
         train_loss = train_loss / train_samples
-      gen_accuracy = SpeakerProcess.eval(model, l0_model, val_dataloader)
+      gen_accuracy = SpeakerProcess.eval(model, l0_model, val_dataloader, utterance_factory)
       print(f'[Epoch {epoch+1}] Metrics - Train Loss: {train_loss:.4f}; L0 Val Accuracy: {gen_accuracy:.4f}')
     return gen_accuracy
