@@ -169,7 +169,7 @@ class ListenerProcess():
       val_loss, val_accuracy = ListenerProcess.eval(val_dataloader, model, criterion, metrics_fn)
       if val_accuracy > best_val_accuracy:
         best_val_accuracy = val_accuracy
-        best_epoch = epoch+1
+        best_epoch = epoch + 1
       
       if (epoch+1) % epochs_to_report == 0:
         print(f'[Epoch {epoch+1}] Train Metrics - Loss: {train_loss:.4f}, Accuracy: {train_accuracy:.4f}; Validation Metrics - Loss:{val_loss:.4f}, Accuracy: {val_accuracy:.4f}')
@@ -201,18 +201,22 @@ class SpeakerProcess():
     gen_accuracy = gen_correct / (total_samples * num_sampled_utt)
     return gen_accuracy
 
-  def train_eval(train_dataloader, val_dataloader, model, l0_model, optimiser, epochs, utterance_factory):
-    # Evaluate L0 listener accuracy on the groundtruth utterances
-    l0_correct = 0
-    val_samples = 0
-    for (batch_x, batch_c_vec, _), _ in val_dataloader:
-      val_samples += batch_c_vec.shape[0]
-      batch_x = batch_x[:, 1:] # Remove the zeroth token, which is the <start> token
-      y_hat = l0_model.predict(batch_x, batch_c_vec)
-      l0_pred = torch.argmax(y_hat, dim=1)
-      l0_correct += torch.count_nonzero(l0_pred == 0).item()
-    l0_accuracy = l0_correct / val_samples
-    print(f'Baseline validation accuracy of l0_model: {l0_accuracy:.4f}')
+  def train_eval(train_dataloader, val_dataloader, model, l0_model, optimiser, epochs, utterance_factory, report_baseline=True, epochs_to_report=1):
+    best_gen_accuracy = 0
+    best_epoch = 0
+    
+    if report_baseline:
+      # Evaluate L0 listener accuracy on the groundtruth utterances
+      l0_correct = 0
+      val_samples = 0
+      for (batch_x, batch_c_vec, _), _ in val_dataloader:
+        val_samples += batch_c_vec.shape[0]
+        batch_x = batch_x[:, 1:] # Remove the zeroth token, which is the <start> token
+        y_hat = l0_model.predict(batch_x, batch_c_vec)
+        l0_pred = torch.argmax(y_hat, dim=1)
+        l0_correct += torch.count_nonzero(l0_pred == 0).item()
+      l0_accuracy = l0_correct / val_samples
+      print(f'Baseline validation accuracy of l0_model: {l0_accuracy:.4f}')
 
     for epoch in range(epochs):
       train_loss = 0
@@ -227,8 +231,13 @@ class SpeakerProcess():
       if train_samples > 0:
         train_loss = train_loss / train_samples
       gen_accuracy = SpeakerProcess.eval(model, l0_model, val_dataloader, utterance_factory)
-      print(f'[Epoch {epoch+1}] Metrics - Train Loss: {train_loss:.4f}; L0 Val Accuracy: {gen_accuracy:.4f}')
-    return gen_accuracy
+      if gen_accuracy > best_gen_accuracy:
+        best_gen_accuracy = gen_accuracy
+        best_epoch = epoch + 1
+      
+      if (epoch+1) % epochs_to_report == 0:
+        print(f'[Epoch {epoch+1}] Metrics - Train Loss: {train_loss:.4f}; L0 Val Accuracy: {gen_accuracy:.4f}')
+    return best_gen_accuracy, best_epoch
     
 
 class PragmaticProcess():
