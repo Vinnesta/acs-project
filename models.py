@@ -56,10 +56,12 @@ class LiteralSpeaker(nn.Module):
       Linear(colour_vector_dim, colour_dim), ReLU(),
       Linear(colour_dim, colour_dim), ReLU()
     )
-    self.encoding_dropout = nn.Dropout(p=dropout)
+    self.colour_dropout = nn.Dropout(p=dropout)
     
     # Layers for generating utterances
     self.word_embeddings = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
+    self.embedding_dropout = nn.Dropout(p=dropout)
+
     lstm_input_size = embedding_dim + (colour_dim*2)
     self.utterance_lstm = nn.LSTM(lstm_input_size, hidden_dim, batch_first=True)
     self.lstm_dropout = nn.Dropout(p=dropout)
@@ -75,23 +77,25 @@ class LiteralSpeaker(nn.Module):
     # Aggregate encodings of distractor colours
     distractor_colours_rep = colour_encodings[1] + colour_encodings[2]
     colours_rep = torch.cat((colour_encodings[0], distractor_colours_rep), dim=-1)
+    colours_rep = self.colour_dropout(colours_rep)
 
     embeds = self.word_embeddings(x)
-    seq_len = embeds.shape[1]
+    embeds = self.embedding_dropout(embeds)
+    total_length = embeds.shape[1]
 
     # Concatenate colour representation to the embeddings of each token
-    utterance_input = torch.cat((colours_rep.unsqueeze(1).expand(-1, seq_len, -1), embeds), dim=-1)
-    utterance_input = self.encoding_dropout(utterance_input)
+    utterance_input = torch.cat((colours_rep.unsqueeze(1).expand(-1, total_length, -1), embeds), dim=-1)
 
+    seq_lengths = torch.count_nonzero(x, dim=1)
+    packed_utterance = pack_padded_sequence(utterance_input, seq_lengths, batch_first=True, enforce_sorted=False)
     if h_0 is None or c_0 is None:
-      lstm_out, (h_n, c_n) = self.utterance_lstm(utterance_input)
+      lstm_out, (h_n, c_n) = self.utterance_lstm(packed_utterance)
     else:
-      lstm_out, (h_n, c_n) = self.utterance_lstm(utterance_input, (h_0, c_0))
-    final_out = self.lstm_dropout(lstm_out)
-    y_hat = []
-    for i in range(final_out.shape[1]):
-      h_i = final_out[:, i]
-      y_hat.append(self.linear(h_i))
+      lstm_out, (h_n, c_n) = self.utterance_lstm(packed_utterance, (h_0, c_0))
+    
+    lstm_out, _ = nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=True, total_length=total_length)
+    lstm_out = self.lstm_dropout(lstm_out)
+    y_hat = self.linear(lstm_out)
     return y_hat, (h_n, c_n)
 
   def train_model(self, inputs, y, optimiser):
@@ -101,21 +105,18 @@ class LiteralSpeaker(nn.Module):
     self.train()
     optimiser.zero_grad()
     y_hat, _ = self(x, c_vec)
-    total_loss = 0
-    for i, y_hat_i in enumerate(y_hat):
-      # For the current timestep, which samples in the batch still have non-padded values?
-      nonzero_samples = y[:, i].nonzero(as_tuple=True)[0]
-      if nonzero_samples.numel() == 0:
-        break
-
-      # Only calculate loss for the non-padded values
-      loss = F.cross_entropy(y_hat_i[nonzero_samples], y[nonzero_samples, i])
-      loss.backward(retain_graph=True)
-      total_loss += loss.data
+    vocab_size = y_hat.shape[-1]
+    y_flatten = y.view(-1)
+    y_hat_flatten = y_hat.view(-1, vocab_size)
+    
+    nonzeros = y_flatten.nonzero(as_tuple=True)[0]
+    loss = F.cross_entropy(y_hat_flatten[nonzeros], y_flatten[nonzeros])
+    loss.backward()
+    total_loss = loss.data
     optimiser.step()
     return total_loss
-    
-    
+
+
 class OriginalLiteralSpeaker(nn.Module):
   def __init__(self, embedding_dim, hidden_dim, vocab_size):
     super(OriginalLiteralSpeaker, self).__init__()
@@ -134,18 +135,20 @@ class OriginalLiteralSpeaker(nn.Module):
     colours_rep = colours_c_n[-1]
 
     embeds = self.word_embeddings(x)
-    seq_len = embeds.shape[1]
-    # Concatenate colour representation to the embeddings of each token
-    utterance_input = torch.cat((colours_rep.unsqueeze(1).expand(-1, seq_len, -1), embeds), dim=-1)
+    total_length = embeds.shape[1]
 
+    # Concatenate colour representation to the embeddings of each token
+    utterance_input = torch.cat((colours_rep.unsqueeze(1).expand(-1, total_length, -1), embeds), dim=-1)
+
+    seq_lengths = torch.count_nonzero(x, dim=1)
+    packed_utterance = pack_padded_sequence(utterance_input, seq_lengths, batch_first=True, enforce_sorted=False)
     if h_0 is None or c_0 is None:
-      lstm_out, (h_n, c_n) = self.utterance_lstm(utterance_input)
+      lstm_out, (h_n, c_n) = self.utterance_lstm(packed_utterance)
     else:
-      lstm_out, (h_n, c_n) = self.utterance_lstm(utterance_input, (h_0, c_0))
-    y_hat = []
-    for i in range(lstm_out.shape[1]):
-      h_i = lstm_out[:, i]
-      y_hat.append(self.linear(h_i))
+      lstm_out, (h_n, c_n) = self.utterance_lstm(packed_utterance, (h_0, c_0))
+    
+    lstm_out, _ = nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=True, total_length=total_length)
+    y_hat = self.linear(lstm_out)
     return y_hat, (h_n, c_n)
 
   def train_model(self, inputs, y, optimiser):
@@ -155,16 +158,13 @@ class OriginalLiteralSpeaker(nn.Module):
     self.train()
     optimiser.zero_grad()
     y_hat, _ = self(x, c_vec)
-    total_loss = 0
-    for i, y_hat_i in enumerate(y_hat):
-      # For the current timestep, which samples in the batch still have non-padded values?
-      nonzero_samples = y[:, i].nonzero(as_tuple=True)[0]
-      if nonzero_samples.numel() == 0:
-        break
-
-      # Only calculate loss for the non-padded values
-      loss = F.cross_entropy(y_hat_i[nonzero_samples], y[nonzero_samples, i])
-      loss.backward(retain_graph=True)
-      total_loss += loss.data
+    vocab_size = y_hat.shape[-1]
+    y_flatten = y.view(-1)
+    y_hat_flatten = y_hat.view(-1, vocab_size)
+    
+    nonzeros = y_flatten.nonzero(as_tuple=True)[0]
+    loss = F.cross_entropy(y_hat_flatten[nonzeros], y_flatten[nonzeros])
+    loss.backward()
+    total_loss = loss.data
     optimiser.step()
     return total_loss

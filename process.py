@@ -70,7 +70,7 @@ class UtteranceFactory():
       with torch.no_grad():
         y_hat, (h_n, c_n) = model(next_token, c_vec, h_n, c_n)
 
-      prob = F.softmax(y_hat[0], dim=1)
+      prob = F.softmax(y_hat[:, 0], dim=1)
       vocab_len = prob.shape[1]
       
       # Always set the probability of PAD_TOKEN to 0
@@ -213,7 +213,7 @@ class ListenerProcess():
     
     
 class SpeakerProcess():
-  def eval(s0_model, l0_model, speaker_dataloader, utterance_factory, num_sampled_utt=8):
+  def eval(s0_model, l0_model, speaker_dataloader, utterance_factory, num_sampled_utt=8, orig_colour_order=False):
     total_samples = 0
     gen_correct = 0
     for (batch_x, batch_c_vec, _), _ in speaker_dataloader:
@@ -231,7 +231,8 @@ class SpeakerProcess():
 
       gen_y_hat = l0_model.predict(padded_utts, c_vec)
       gen_pred = torch.argmax(gen_y_hat, dim=1)
-      gen_correct += torch.count_nonzero(gen_pred == 0).item()
+      target = 2 if orig_colour_order else 0
+      gen_correct += torch.count_nonzero(gen_pred == target).item()
 
     gen_accuracy = gen_correct / (total_samples * num_sampled_utt)
     return gen_accuracy
