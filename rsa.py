@@ -1,5 +1,6 @@
 import itertools
 import torch
+import torch.nn.functional as F
 
 class RSA():
   def __init__(self, num_samples, vocab, utterance_factory):
