@@ -23,9 +23,18 @@ class RSA():
     return c_vec_alt_1, c_vec_alt_2
 
   def literal_listener(self, utt, c_vec, l0_model):
-    listener_tokens = torch.tensor(self.vocab(utt), dtype=torch.long)
-    listener_tokens = torch.unsqueeze(listener_tokens, dim=0)
-    prob = l0_model.predict(listener_tokens, c_vec).squeeze().tolist()
+    if isinstance(utt[0], list):
+      # `utt` is a batch of utterances
+      c_vec = c_vec.repeat((len(utt), 1, 1))
+
+      # Pad the utterances so it can be fed to the listener model as a batch
+      max_utt_len = max(len(u) for u in utt)
+      padded_utts = [F.pad(torch.tensor(self.vocab(u), dtype=torch.long), (0, max_utt_len-len(u))) for u in utt]
+      listener_tokens = torch.stack(padded_utts)
+    else:
+      listener_tokens = torch.tensor(self.vocab(utt), dtype=torch.long)
+      listener_tokens = torch.unsqueeze(listener_tokens, dim=0)
+    prob = l0_model.predict(listener_tokens, c_vec)
     return prob
 
   def sample_utterances(self, c_vec, s0_model):
@@ -49,25 +58,26 @@ class RSA():
     applicable_utt += self.sample_utterances(c_vec_alt_1, s0_model)
     applicable_utt += self.sample_utterances(c_vec_alt_2, s0_model)
 
+    # Group sampled utterances
+    unique_utts = []
+    unique_utt_counts = []
     applicable_utt.sort()
-    # Deduplicate sampled utterances
-    applicable_utt = list(utt for utt,_ in itertools.groupby(applicable_utt))
+    for utt, g in itertools.groupby(applicable_utt):
+      unique_utts.append(utt)
+      unique_utt_counts.append(len(list(g)))
 
-    # TO DO: weight repeated utterances
-    prob_mass = []
-    for utt in applicable_utt:
-      l0_choices = self.literal_listener(utt, c_vec, l0_model)
-      target = 2 if orig_colour_order else 0
-      prob_mass.append(l0_choices[target])
-    softmax = [prob / sum(prob_mass) for prob in prob_mass]
+    l0_choices = self.literal_listener(unique_utts, c_vec, l0_model)
+    target = 2 if orig_colour_order else 0
+    prob_mass = l0_choices[:, target].tolist()
 
+    # Weight the probability masses by the number of duplicate utterances
+    weighted_prob_mass = [mass * count for mass, count in zip(prob_mass, unique_utt_counts)]
+    softmax = [prob / sum(weighted_prob_mass) for prob in weighted_prob_mass]
+    
     utt_prob = {}
-    for utt, prob in zip(applicable_utt, softmax):
+    for utt, prob in zip(unique_utts, softmax):
       utt_str = ' '.join(utt)
-      if utt_str in utt_prob:
-        utt_prob[utt_str] += prob
-      else:
-        utt_prob[utt_str] = prob
+      utt_prob[utt_str] = prob
     return utt_prob
 
   def pragmatic_listener(self, utt, c_vec, l0_model, s0_model, orig_colour_order=False):

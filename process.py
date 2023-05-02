@@ -17,43 +17,6 @@ class UtteranceFactory():
     self.end_token = end_token
     self.vocab = vocab
   
-  def generate_utterance(self, model, c_vec, method=GenerationMethod.SAMPLE, return_index=False):
-    '''
-      `c_vec`: colour vectors tensor of dim (N, 3, COLOUR_VECTOR_DIM)
-      `return_index`: if True, returns the token indices based on `vocab` instead of the token strings
-    '''
-    num_samples = c_vec.shape[0]
-    start = torch.tensor(self.vocab([self.start_token]))
-    start = start.repeat((num_samples, 1))
-    next_token = start
-    model.eval()
-
-    tokens = []
-    h_n = None
-    c_n = None
-    while len(tokens) < self.max_seq_len:
-      with torch.no_grad():
-        y_hat, (h_n, c_n) = model(next_token, c_vec, h_n, c_n)
-      
-      if method == GenerationMethod.SAMPLE:
-        prob = F.softmax(y_hat[0].squeeze(), dim=0).tolist()
-        pred = random.choices(range(len(prob)), prob)[0]
-      elif method == GenerationMethod.GREEDY:
-        pred = torch.argmax(y_hat[0], dim=1).item()
-      else:
-        raise NotImplementedError
-      
-      token = self.vocab.lookup_token(pred)
-      if token == self.end_token:
-        break
-      
-      if return_index:
-        tokens.append(pred)
-      else:
-        tokens.append(token)
-      next_token = torch.unsqueeze(torch.tensor([pred]), dim=0)
-    return tokens
-
   def generate_utterances(self, model, c_vec, method=GenerationMethod.SAMPLE, return_index=False):
     num_samples = c_vec.shape[0]
     model.eval()
@@ -105,22 +68,23 @@ class UtteranceFactory():
 
 
 class ListenerMetrics():
-  def listener_accuracy(y_hat):
+  def listener_accuracy(y_hat, y):
     pred = torch.argmax(y_hat, dim=1)
-    correct_pred = torch.count_nonzero(pred == 0).item()
+    correct_pred = torch.count_nonzero(pred == y).item()
     return (correct_pred, )
     
-  def prob_listener_score(y_hat):
+  def prob_listener_score(y_hat, y):
     rounding_decimals = 20
-    target_idx = 0
-    distractor_1_idx = 1
-    distractor_2_idx = 2
 
     score = 0
     argmax = 0
     pairs = 0
     triplets = 0
     for i in range(y_hat.shape[0]):
+      target_idx = y[i]
+      distractor_1_idx = (target_idx + 1) % 3
+      distractor_2_idx = (target_idx + 2) % 3
+      
       rounded = y_hat[i].round(decimals=rounding_decimals)
       target_val = rounded[target_idx].item()
       max_other_val = max(rounded[distractor_1_idx].item(), rounded[distractor_2_idx].item())
@@ -152,7 +116,7 @@ class ListenerProcess():
     loss.backward()
     optimiser.step()
 
-    metrics = metrics_fn(y_hat)
+    metrics = metrics_fn(y_hat, y)
     return loss.data, metrics
 
   def eval(val_dataloader, model, criterion, metrics_fn):
@@ -170,7 +134,7 @@ class ListenerProcess():
         y_hat = model(x, c_vec)
         loss = criterion(y_hat, y)
         pred = torch.argmax(y_hat, dim=1)
-        metrics = metrics_fn(y_hat)
+        metrics = metrics_fn(y_hat, y)
         correct_pred = metrics[0]
         
         val_loss += loss.data * sample_size
@@ -278,13 +242,13 @@ class PragmaticProcess():
     total = 0
     l0_correct = 0
     l2_correct = 0
-    for (batch_x, batch_c_vec, batch_hsl), _ in dataloader:
+    for (batch_x, batch_c_vec, batch_hsl), y in dataloader:
       num_samples = batch_x.shape[0]
       total += num_samples
       
       # L0 Accuracy
       y_hat = l0_model(batch_x, batch_c_vec)
-      metrics = metrics_fn(y_hat)
+      metrics = metrics_fn(y_hat, y)
       correct_pred = metrics[0]
       l0_correct += correct_pred
       
