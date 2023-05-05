@@ -178,6 +178,9 @@ class ListenerProcess():
     
 class SpeakerProcess():
   def eval(s0_model, l0_model, speaker_dataloader, utterance_factory, num_sampled_utt=8, orig_colour_order=False):
+    s0_model.eval()
+    l0_model.eval()
+    
     total_samples = 0
     gen_correct = 0
     for (batch_x, batch_c_vec, _), _ in speaker_dataloader:
@@ -202,6 +205,8 @@ class SpeakerProcess():
     return gen_accuracy
 
   def train_eval(train_dataloader, val_dataloader, model, l0_model, optimiser, epochs, utterance_factory, report_baseline=True, epochs_to_report=1):
+    l0_model.eval()
+    
     best_gen_accuracy = 0
     best_epoch = 0
     
