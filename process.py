@@ -148,6 +148,7 @@ class ListenerProcess():
   def train_eval(train_dataloader, val_dataloader, model, criterion, optimiser, epochs, metrics_fn, epochs_to_report=1):
     best_val_accuracy = 0
     best_epoch = 0
+    best_params = None
     
     for epoch in range(epochs):
       train_loss = 0
@@ -170,10 +171,11 @@ class ListenerProcess():
       if val_accuracy > best_val_accuracy:
         best_val_accuracy = val_accuracy
         best_epoch = epoch + 1
+        best_params = model.state_dict()
       
       if (epoch+1) % epochs_to_report == 0:
         print(f'[Epoch {epoch+1}] Train Metrics - Loss: {train_loss:.4f}, Accuracy: {train_accuracy:.4f}; Validation Metrics - Loss:{val_loss:.4f}, Accuracy: {val_accuracy:.4f}')
-    return best_val_accuracy, best_epoch
+    return best_val_accuracy, best_epoch, best_params
     
     
 class SpeakerProcess():
@@ -209,6 +211,7 @@ class SpeakerProcess():
     
     best_gen_accuracy = 0
     best_epoch = 0
+    best_params = None
     
     if report_baseline:
       # Evaluate L0 listener accuracy on the groundtruth utterances
@@ -239,10 +242,11 @@ class SpeakerProcess():
       if gen_accuracy > best_gen_accuracy:
         best_gen_accuracy = gen_accuracy
         best_epoch = epoch + 1
+        best_params = model.state_dict()
       
       if (epoch+1) % epochs_to_report == 0:
         print(f'[Epoch {epoch+1}] Metrics - Train Loss: {train_loss:.4f}; L0 Val Accuracy: {gen_accuracy:.4f}')
-    return best_gen_accuracy, best_epoch
+    return best_gen_accuracy, best_epoch, best_params
     
 
 class PragmaticProcess():
