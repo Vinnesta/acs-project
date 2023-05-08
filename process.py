@@ -145,8 +145,8 @@ class ListenerProcess():
       val_accuracy = val_correct / val_samples
     return val_loss, val_accuracy
 
-  def train_eval(train_dataloader, val_dataloader, model, criterion, optimiser, epochs, metrics_fn, epochs_to_report=1, early_stop_patience=None):
-    best_val_accuracy = 0
+  def train_eval(train_dataloader, val_dataloader, model, criterion, optimiser, epochs, metrics_fn, epochs_to_report=1, early_stop_patience=None, prioritise_accuracy=True):
+    best_val_metric = 0
     best_epoch = 0
     best_params = None
     
@@ -166,13 +166,21 @@ class ListenerProcess():
       if train_samples > 0:
         train_loss = train_loss / train_samples
         train_accuracy = train_correct / train_samples
-
+      
       val_loss, val_accuracy = ListenerProcess.eval(val_dataloader, model, criterion, metrics_fn)
-      if val_accuracy > best_val_accuracy:
-        best_val_accuracy = val_accuracy
-        best_epoch = epoch + 1
-        best_params = model.state_dict()
-        
+      if prioritise_accuracy:
+        # Track accuracy as the validation metric
+        if val_accuracy > best_val_metric:
+          best_val_metric = val_accuracy
+          best_epoch = epoch + 1
+          best_params = model.state_dict()
+      else:
+        # Track loss as the validation metric
+        if best_val_metric == 0 or val_loss < best_val_metric:
+          best_val_metric = val_loss
+          best_epoch = epoch + 1
+          best_params = model.state_dict()
+      
       if (epoch+1) % epochs_to_report == 0:
         print(f'[Epoch {epoch+1}] Train Metrics - Loss: {train_loss:.4f}, Accuracy: {train_accuracy:.4f}; Validation Metrics - Loss:{val_loss:.4f}, Accuracy: {val_accuracy:.4f}')
         
@@ -182,7 +190,7 @@ class ListenerProcess():
           print("Early stopping patience reached, stopping training...")
           break
       
-    return best_val_accuracy, best_epoch, best_params
+    return best_val_metric, best_epoch, best_params
     
     
 class SpeakerProcess():
