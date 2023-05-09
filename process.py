@@ -259,7 +259,7 @@ class SpeakerProcess():
       total_samples += num_samples
       
       generated_utts = []
-      for i in num_samples:
+      for i in range(num_samples):
         c_vec = batch_c_vec[i:i+1]
         utts = utterance_factory.generate_utterances_beam(s0_model, c_vec, beam_width=num_sampled_utt, return_index=True)
         generated_utts.append(utts)
