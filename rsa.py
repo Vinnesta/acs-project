@@ -3,11 +3,10 @@ import torch
 import torch.nn.functional as F
 
 class RSA():
-  def __init__(self, num_samples, vocab, utterance_factory):
-    self.num_samples = num_samples
+  def __init__(self, vocab, utterance_factory):
     self.vocab = vocab
     self.utterance_factory = utterance_factory
-  
+       
   def swap_targets(c_vec, orig_colour_order):
     '''
     `c_vec`: colour vectors tensor of dim (1, 3, COLOUR_VECTOR_DIM)
@@ -38,54 +37,59 @@ class RSA():
     prob = l0_model.predict(listener_tokens, c_vec)
     return prob
 
-  def sample_utterances(self, c_vec, s0_model):
-    # Duplicate c_vec to repeat the utterance sampling process by `num_sampled_utt` times
-    c_vec = c_vec.repeat((self.num_samples, 1, 1))
-    generated_utts = self.utterance_factory.generate_utterances(s0_model, c_vec, return_index=False)
-    return generated_utts
-
-  def pragmatic_speaker(self, utt, c_vec, l0_model, s0_model, orig_colour_order=False):
-    '''
-    `utt`: a given test utterance that is compared against sample utterances from literal speaker
-    `c_vec`: colour vectors tensor of dim (1, 3, COLOUR_VECTOR_DIM), where the last colour is the target
-    '''
-    applicable_utt = [utt]
-    
-    # Swap colours in c_vec to make the two distractors the target
-    c_vec_alt_1, c_vec_alt_2 = RSA.swap_targets(c_vec, orig_colour_order)
-    
-    # For each of the colours in c_vec, sample utterances from the literal_speaker to get a multiset
-    applicable_utt += self.sample_utterances(c_vec, s0_model)
-    applicable_utt += self.sample_utterances(c_vec_alt_1, s0_model)
-    applicable_utt += self.sample_utterances(c_vec_alt_2, s0_model)
-
-    # Group sampled utterances
+  def sample_utterances(self, num_samples, c_vec, s0_model):
     unique_utts = []
-    unique_utt_counts = []
-    applicable_utt.sort()
-    for utt, g in itertools.groupby(applicable_utt):
-      unique_utts.append(utt)
-      unique_utt_counts.append(len(list(g)))
 
-    l0_choices = self.literal_listener(unique_utts, c_vec, l0_model)
+    # In order to generate unique utterances using a sampling approach,
+    # deduplicate generated results and repeat until enough samples have been acquired
+    while len(unique_utts) < num_samples:
+      new_samples = num_samples - len(unique_utts)
+      # Duplicate c_vec to repeat the utterance sampling process by `new_samples` times
+      repeated_c_vec = c_vec.repeat((new_samples, 1, 1))
+      unique_utts += self.utterance_factory.generate_utterances(s0_model, repeated_c_vec, return_index=False)
+      unique_utts.sort()
+      unique_utts = list(utt for utt,_ in itertools.groupby(unique_utts))
+    return unique_utts
+
+  def get_applicable_utterances(self, utt, num_samples, c_vec, s0_model, orig_colour_order=False):
+    # Swap colours in c_vec to make the two distractors the "target"
+    c_vec_alt_1, c_vec_alt_2 = RSA.swap_targets(c_vec, orig_colour_order)
+
+    applicable_utt = [utt]
+    # For each of the colours in c_vec, sample utterances from the literal_speaker
+    applicable_utt += self.sample_utterances(num_samples, c_vec, s0_model)
+    applicable_utt += self.sample_utterances(num_samples, c_vec_alt_1, s0_model)
+    applicable_utt += self.sample_utterances(num_samples, c_vec_alt_2, s0_model)
+    
+    # Remove duplicate utterances even though sample_utterances() returns unique utts,
+    # since `utt` and same utterances could have been generated across different colours
+    applicable_utt.sort()
+    applicable_utt = list(u for u, _ in itertools.groupby(applicable_utt))
+    return applicable_utt
+
+  def pragmatic_speaker(self, applicable_utt, c_vec, l0_model, orig_colour_order=False):
+    '''
+    `applicable_utt`: list of applicable utterances for colours in `c_vec`
+    `c_vec`: colour vectors tensor of dim (1, 3, COLOUR_VECTOR_DIM)
+    '''
+
+    l0_choices = self.literal_listener(applicable_utt, c_vec, l0_model)
     target = 2 if orig_colour_order else 0
     prob_mass = l0_choices[:, target].tolist()
+    softmax = [prob / sum(prob_mass) for prob in prob_mass]
 
-    # Weight the probability masses by the number of duplicate utterances
-    weighted_prob_mass = [mass * count for mass, count in zip(prob_mass, unique_utt_counts)]
-    softmax = [prob / sum(weighted_prob_mass) for prob in weighted_prob_mass]
-    
     utt_prob = {}
-    for utt, prob in zip(unique_utts, softmax):
+    for utt, prob in zip(applicable_utt, softmax):
       utt_str = ' '.join(utt)
       utt_prob[utt_str] = prob
     return utt_prob
 
-  def pragmatic_listener(self, utt, c_vec, l0_model, s0_model, orig_colour_order=False):
+  def pragmatic_listener(self, utt, c_vec, l0_model, s0_model, num_samples=8, orig_colour_order=False):
     '''
     Args:
       `utt`: the given utterance
       `c_vec`: colour vectors tensor of dim (1, 3, COLOUR_VECTOR_DIM), where the last colour is the target
+      `num_samples`: number of alternative utterances to generate per colour
 
     Returns:
       `inferred_prob`: the probabilities for each of the three colours respectively in c_vec
@@ -95,12 +99,12 @@ class RSA():
     
     # Swap colours in c_vec to make the two distractors the "target"
     c_vec_alt_1, c_vec_alt_2 = RSA.swap_targets(c_vec, orig_colour_order)
+    applicable_utt = self.get_applicable_utterances(utt, num_samples, c_vec, s0_model, orig_colour_order)
 
-    speaker_utt_prob_target = self.pragmatic_speaker(utt, c_vec, l0_model, s0_model, orig_colour_order)
-    speaker_utt_prob_alt_1 = self.pragmatic_speaker(utt, c_vec_alt_1, l0_model, s0_model, orig_colour_order)
-    speaker_utt_prob_alt_2 = self.pragmatic_speaker(utt, c_vec_alt_2, l0_model, s0_model, orig_colour_order)
+    speaker_utt_prob_target = self.pragmatic_speaker(applicable_utt, c_vec, l0_model, orig_colour_order)
+    speaker_utt_prob_alt_1 = self.pragmatic_speaker(applicable_utt, c_vec_alt_1, l0_model, orig_colour_order)
+    speaker_utt_prob_alt_2 = self.pragmatic_speaker(applicable_utt, c_vec_alt_2, l0_model, orig_colour_order)
 
-    # TO DO: Fix handling of utt list vs utt string
     utt_str = ' '.join(utt)
     prob_mass = [speaker_utt_prob_target[utt_str], speaker_utt_prob_alt_1[utt_str], speaker_utt_prob_alt_2[utt_str]]
     inferred_prob = [mass/sum(prob_mass) for mass in prob_mass]
