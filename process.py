@@ -100,12 +100,14 @@ class UtteranceFactory():
       # For each hypothesis being tested, add its current log probability to the new frontier (continuations)
       for i in range(continue_count):
         curr_hyp_p = continuing_hyp[i][-1]
-        continuations = (log_prob[i, -1, :] + curr_hyp_p).tolist()
-        # For each possible token continuation, append its log probability (p) to next_hypotheses
-        for j, p in enumerate(continuations):
+        continuations = log_prob[i, -1, :] + curr_hyp_p
+        
+        # Keep only the top `beam_width` continuations for each hypothesis
+        top_continuations = torch.argsort(continuations, dim=-1, descending=True)[:beam_width]
+        for j in top_continuations.tolist():
           new_seq = continuing_tokens[i].copy()
           new_seq.append(j)
-          next_hypotheses.append((new_seq, p))
+          next_hypotheses.append((new_seq, continuations[j].item()))
 
       next_hypotheses.sort(key=lambda x: x[-1], reverse=True)
       hypotheses = next_hypotheses[:beam_width]
