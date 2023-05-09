@@ -65,6 +65,60 @@ class UtteranceFactory():
     # Remove the zeroth element in each pred before returning as they are START_TOKENs
     indexes = [pred[1:] for pred in preds]
     return indexes if return_index else tokens
+    
+  def generate_utterances_beam(self, model, c_vec, beam_width, return_index=False):
+    model.eval()
+    log_softmax = nn.LogSoftmax(dim=-1)
+    start_token_idx = self.vocab.__getitem__(self.start_token)
+    end_token_idx = self.vocab.__getitem__(self.end_token)
+
+    hypotheses = [([start_token_idx], 0)]
+    for n in range(self.max_seq_len):
+      # For hypotheses that have reached EOS, add them directly into next_hypotheses
+      next_hypotheses = [hyp for hyp in hypotheses if hyp[0][-1] == end_token_idx]
+
+      # For the remaining hypotheses, predict next tokens
+      continuing_hyp = [hyp for hyp in hypotheses if hyp[0][-1] != end_token_idx]
+      continue_count = len(continuing_hyp)
+      if continue_count == 0:
+        break
+
+      continuing_tokens = [hyp[0] for hyp in continuing_hyp]
+      tokens_tensor = torch.tensor(continuing_tokens)
+      repeated_c_vec = c_vec.repeat((continue_count, 1, 1))
+
+      with torch.no_grad():
+        y_hat, (h_n, c_n) = model(tokens_tensor, repeated_c_vec)
+        log_prob = log_softmax(y_hat)
+        if n == 0:
+          # To prevent empty utterances, set log probability of <end> token to (min_value - 1) for first generated token
+          assert(log_prob.shape[1] == 1)
+          min_values = torch.min(log_prob, dim=-1).values
+          log_prob[:, 0, end_token_idx] = min_values - 1
+
+      # For each hypothesis being tested, add its current log probability to the new frontier (continuations)
+      for i in range(continue_count):
+        curr_hyp_p = continuing_hyp[i][-1]
+        continuations = (log_prob[i, -1, :] + curr_hyp_p).tolist()
+        # For each possible token continuation, append its log probability (p) to next_hypotheses
+        for j, p in enumerate(continuations):
+          new_seq = continuing_tokens[i].copy()
+          new_seq.append(j)
+          next_hypotheses.append((new_seq, p))
+
+      next_hypotheses.sort(key=lambda x: x[-1], reverse=True)
+      hypotheses = next_hypotheses[:beam_width]
+
+    final_token_indices = []
+    for hyp in hypotheses:
+      tokens = hyp[0]
+      # Remove <start> and <end> tokens
+      if tokens[-1] == end_token_idx:
+        final_token_indices.append(tokens[1:-1])
+      else:
+        final_token_indices.append(tokens[1:])
+    final_tokens = [self.vocab.lookup_tokens(indices) for indices in final_token_indices]
+    return final_token_indices if return_index else final_tokens
 
 
 class ListenerMetrics():
@@ -204,9 +258,11 @@ class SpeakerProcess():
       num_samples = batch_c_vec.shape[0]
       total_samples += num_samples
       
-      # Duplicate c_vec to repeat the utterance sampling process by `num_sampled_utt` times
-      c_vec = batch_c_vec.repeat((num_sampled_utt, 1, 1))
-      generated_utts = utterance_factory.generate_utterances(s0_model, c_vec, method=GenerationMethod.SAMPLE, return_index=True)
+      generated_utts = []
+      for i in num_samples:
+        c_vec = batch_c_vec[i:i+1]
+        utts = utterance_factory.generate_utterances_beam(s0_model, c_vec, beam_width=num_sampled_utt, return_index=True)
+        generated_utts.append(utts)
       
       # Pad the generated utterances so it can be fed to the listener model as a batch
       max_utt_len = max(len(utt) for utt in generated_utts)
