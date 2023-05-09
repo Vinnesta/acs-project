@@ -265,7 +265,7 @@ class SpeakerProcess():
     
 
 class PragmaticProcess():
-  def pragmatic_eval(dataloader, l0_model, s0_model, vocab, metrics_fn, rsa, num_l2_repeats=8, orig_colour_order=False):
+  def pragmatic_eval(dataloader, l0_model, s0_model, vocab, metrics_fn, rsa, num_utt_samples, orig_colour_order=False):
     # Fix the random seed for reproducibility
     random.seed(42)
     
@@ -293,9 +293,7 @@ class PragmaticProcess():
           c_vec = c_vec[:, [2, 1, 0]]
         length = torch.count_nonzero(x)
         tokens = vocab.lookup_tokens(x[:length].tolist())
-        l2_choice = np.zeros(3)
-        for _ in range(num_l2_repeats):
-          l2_choice = rsa.pragmatic_listener(tokens, c_vec, l0_model, s0_model, orig_colour_order)
+        l2_choice = rsa.pragmatic_listener(tokens, c_vec, l0_model, s0_model, num_samples, orig_colour_order)
         if np.argmax(l2_choice) == 0:
           l2_correct += 1
       if int(total/num_samples) % 1 == 0:
