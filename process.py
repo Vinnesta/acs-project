@@ -270,7 +270,8 @@ class SpeakerProcess():
       padded_utts = [F.pad(torch.tensor(utt), (0, max_utt_len-len(utt))) for utt in generated_utts]
       padded_utts = torch.stack(padded_utts)
 
-      gen_y_hat = l0_model.predict(padded_utts, c_vec)
+      repeated_c_vec = batch_c_vec.repeat_interleave(num_sampled_utt, dim=0)
+      gen_y_hat = l0_model.predict(padded_utts, repeated_c_vec)
       gen_pred = torch.argmax(gen_y_hat, dim=1)
       target = 2 if orig_colour_order else 0
       gen_correct += torch.count_nonzero(gen_pred == target).item()
