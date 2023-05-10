@@ -61,7 +61,10 @@ class RSA():
     l0_choices = self.literal_listener(applicable_utt, c_vec, l0_model)
     target = 2 if orig_colour_order else 0
     prob_mass = l0_choices[:, target].tolist()
-    softmax = [prob / sum(prob_mass) for prob in prob_mass]
+    if sum(prob_mass) == 0:
+      softmax = [0] * len(prob_mass)
+    else:
+      softmax = [prob / sum(prob_mass) for prob in prob_mass]
 
     utt_prob = {}
     for utt, prob in zip(applicable_utt, softmax):
@@ -92,5 +95,8 @@ class RSA():
 
     utt_str = ' '.join(utt)
     prob_mass = [speaker_utt_prob_target[utt_str], speaker_utt_prob_alt_1[utt_str], speaker_utt_prob_alt_2[utt_str]]
-    inferred_prob = [mass/sum(prob_mass) for mass in prob_mass]
+    if sum(prob_mass) == 0:
+      inferred_prob = [1/3, 1/3, 1/3]
+    else:
+      inferred_prob = [mass/sum(prob_mass) for mass in prob_mass]
     return inferred_prob
