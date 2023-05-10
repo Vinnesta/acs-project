@@ -360,5 +360,5 @@ class PragmaticProcess():
         
     l0_accuracy = l0_correct / total
     l2_accuracy = l2_correct / total
-    print(f"L0 Accuracy: {l0_accuracy:.3f}, L2 Accuracy: {l2_accuracy:.3f}")
+    print(f"Total: {total}, L0 Correct: {l0_correct}, L0 Accuracy: {l0_accuracy:.3f}, L2 Correct: {l2_correct}, L2 Accuracy: {l2_accuracy:.3f}")
     return l0_accuracy, l2_accuracy
