@@ -168,7 +168,7 @@ class DatasetFactory():
     self.start_token = start_token
     self.end_token = end_token
 
-  def process_listener_data(self, df, vocab, listener_pov=False):
+  def process_listener_data(self, df, vocab, target="speaker"):
     # Convert speaker utterances into sequences of one-hot encoded embeddings
     # But rather than actual one-hot vectors, just use the vocabulary index for each token
     # Dim: Number of samples * MAX_SEQ_LEN
@@ -201,13 +201,23 @@ class DatasetFactory():
     distractors2 = torch.transpose(torch.tensor([distr2H, distr2S, distr2L]), dim0=0, dim1=1)
     C = torch.stack([targets, distractors1, distractors2], dim=1)
 
-    if listener_pov:
-      target_mapping = {'target': 0, 'distr1': 1, 'distr2': 2}
-      Y = torch.tensor([target_mapping[x] for x in df.clickStatus.tolist()], dtype=torch.long)
-    else:
+    target_mapping = {'target': 0, 'distr1': 1, 'distr2': 2}
+    if target == "speaker":
       # Set the target labels as zero for all samples, since the first colour in context is the target
       # Dim: Number of samples
       Y = torch.zeros(X.shape[0], dtype=torch.long)
+    elif target == "listener":
+      Y = torch.tensor([target_mapping[x] for x in df.clickStatus.tolist()], dtype=torch.long)
+    elif target == "mixed":
+      Y = torch.zeros((len(df), 3))
+      Y[:, 0] = 1
+      for i, x in enumerate(df.clickStatus.tolist()):
+        t = target_mapping[x]
+        if t != 0:
+          Y[i, 0] = 0.5
+          Y[i, t] = 0.5
+    else:
+      raise ValueError
 
     dataset = ColourDataset(x=X, c=C, y=Y, colour_vector_dim=self.colour_vector_dim)
     return dataset
