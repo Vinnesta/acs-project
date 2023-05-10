@@ -260,3 +260,7 @@ class DatasetFactory():
 
     dataset = ColourDataset(x=X, c=C, y=Y, colour_vector_dim=self.colour_vector_dim)
     return dataset
+    
+  def remove_conflicts(df):
+    new_df = df[df.clickStatus == "target"]
+    return new_df
