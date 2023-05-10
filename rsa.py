@@ -37,32 +37,17 @@ class RSA():
     prob = l0_model.predict(listener_tokens, c_vec)
     return prob
 
-  def sample_utterances(self, num_samples, c_vec, s0_model):
-    unique_utts = []
-
-    # In order to generate unique utterances using a sampling approach,
-    # deduplicate generated results and repeat until enough samples have been acquired
-    while len(unique_utts) < num_samples:
-      new_samples = num_samples - len(unique_utts)
-      # Duplicate c_vec to repeat the utterance sampling process by `new_samples` times
-      repeated_c_vec = c_vec.repeat((new_samples, 1, 1))
-      unique_utts += self.utterance_factory.generate_utterances(s0_model, repeated_c_vec, return_index=False)
-      unique_utts.sort()
-      unique_utts = list(utt for utt,_ in itertools.groupby(unique_utts))
-    return unique_utts
-
   def get_applicable_utterances(self, utt, num_samples, c_vec, s0_model, orig_colour_order=False):
     # Swap colours in c_vec to make the two distractors the "target"
     c_vec_alt_1, c_vec_alt_2 = RSA.swap_targets(c_vec, orig_colour_order)
 
     applicable_utt = [utt]
-    # For each of the colours in c_vec, sample utterances from the literal_speaker
-    applicable_utt += self.sample_utterances(num_samples, c_vec, s0_model)
-    applicable_utt += self.sample_utterances(num_samples, c_vec_alt_1, s0_model)
-    applicable_utt += self.sample_utterances(num_samples, c_vec_alt_2, s0_model)
+    # For each of the colours in c_vec, generate utterances from the literal_speaker
+    applicable_utt += self.utterance_factory.generate_utterances_beam(s0_model, c_vec, beam_width=num_samples, return_index=False)
+    applicable_utt += self.utterance_factory.generate_utterances_beam(s0_model, c_vec_alt_1, beam_width=num_samples, return_index=False)
+    applicable_utt += self.utterance_factory.generate_utterances_beam(s0_model, c_vec_alt_2, beam_width=num_samples, return_index=False)
     
-    # Remove duplicate utterances even though sample_utterances() returns unique utts,
-    # since `utt` and same utterances could have been generated across different colours
+    # Remove duplicate utterances since `utt` and same utterances could have been generated across different colours
     applicable_utt.sort()
     applicable_utt = list(u for u, _ in itertools.groupby(applicable_utt))
     return applicable_utt
