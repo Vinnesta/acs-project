@@ -345,15 +345,14 @@ class PragmaticProcess():
       correct_pred = metrics[0]
       l0_correct += correct_pred
       
-      for i in range(num_samples):
-        x = batch_x[i]
-        c_vec = torch.unsqueeze(batch_c_vec[i], dim=0)
+      for x, c_vec in zip(batch_x, batch_c_vec):
+        c_vec = c_vec.unsqueeze(dim=0)
         if orig_colour_order:
           # Original speaker model expects the target colour to be the last element of c_vec
           c_vec = c_vec[:, [2, 1, 0]]
         length = torch.count_nonzero(x)
         tokens = vocab.lookup_tokens(x[:length].tolist())
-        l2_choice = rsa.pragmatic_listener(tokens, c_vec, l0_model, s0_model, num_samples, orig_colour_order)
+        l2_choice = rsa.pragmatic_listener(tokens, c_vec, l0_model, s0_model, num_utt_samples, orig_colour_order)
         if np.argmax(l2_choice) == 0:
           l2_correct += 1
       if int(total/num_samples) % 1 == 0:
