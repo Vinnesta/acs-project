@@ -345,6 +345,7 @@ class PragmaticProcess():
       correct_pred = metrics[0]
       l0_correct += correct_pred
       
+      l2_y_hat = []
       for x, c_vec in zip(batch_x, batch_c_vec):
         c_vec = c_vec.unsqueeze(dim=0)
         if orig_colour_order:
@@ -353,8 +354,9 @@ class PragmaticProcess():
         length = torch.count_nonzero(x)
         tokens = vocab.lookup_tokens(x[:length].tolist())
         l2_choice = rsa.pragmatic_listener(tokens, c_vec, l0_model, s0_model, num_utt_samples, orig_colour_order)
-        if np.argmax(l2_choice) == 0:
-          l2_correct += 1
+        l2_y_hat.append(l2_choice)
+      l2_metrics = metrics_fn(torch.tensor(l2_y_hat), y)
+      l2_correct += l2_metrics[0]
       if int(total/num_samples) % report_freq == 0:
         print(f"{total} samples processed, {l0_correct} l0 correct, {l2_correct} l2 correct")
         
