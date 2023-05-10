@@ -325,7 +325,7 @@ class SpeakerProcess():
     
 
 class PragmaticProcess():
-  def pragmatic_eval(dataloader, l0_model, s0_model, vocab, metrics_fn, rsa, num_utt_samples, orig_colour_order=False):
+  def pragmatic_eval(dataloader, l0_model, s0_model, vocab, metrics_fn, rsa, num_utt_samples, orig_colour_order=False, report_freq=1):
     # Fix the random seed for reproducibility
     random.seed(42)
     
@@ -355,7 +355,7 @@ class PragmaticProcess():
         l2_choice = rsa.pragmatic_listener(tokens, c_vec, l0_model, s0_model, num_utt_samples, orig_colour_order)
         if np.argmax(l2_choice) == 0:
           l2_correct += 1
-      if int(total/num_samples) % 1 == 0:
+      if int(total/num_samples) % report_freq == 0:
         print(f"{total} samples processed, {l0_correct} l0 correct, {l2_correct} l2 correct")
         
     l0_accuracy = l0_correct / total
