@@ -161,6 +161,37 @@ class ListenerMetrics():
         argmax += 1
     return (score, argmax, pairs, triplets)
     
+  def mixed_score(y_hat, y):
+    rounding_decimals = 20
+
+    score = 0
+    argmax = 0
+    pairs = 0
+    triplets = 0
+    for i in range(y_hat.shape[0]):
+      target_idx = 0
+      distractor_1_idx = 1
+      distractor_2_idx = 2
+
+      rounded = y_hat[i].round(decimals=rounding_decimals)
+      target_val = rounded[target_idx].item()
+      max_other_val = max(rounded[distractor_1_idx].item(), rounded[distractor_2_idx].item())
+      min_other_val = min(rounded[distractor_1_idx].item(), rounded[distractor_2_idx].item())
+
+      if target_val == max_other_val:
+        if target_val == min_other_val:
+          # 1/3 chance for all three colours
+          score += 1/3
+          triplets += 1
+        else:
+          # 50-50 between target and one other colour
+          score += 1/2
+          pairs += 1
+      elif torch.argmax(rounded) == target_idx:
+        score += 1
+        argmax += 1
+    return (score, argmax, pairs, triplets)
+    
 class ListenerProcess():
   def train(inputs, y, model, optimiser, criterion, metrics_fn):
     x = inputs[0]
