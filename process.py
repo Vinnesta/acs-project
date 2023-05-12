@@ -132,7 +132,7 @@ class ListenerMetrics():
     return (correct_pred, )
     
   def prob_listener_score(y_hat, y):
-    rounding_decimals = 20
+    rounding_decimals = 10
 
     score = 0
     argmax = 0
@@ -163,7 +163,7 @@ class ListenerMetrics():
     return (score, argmax, pairs, triplets)
     
   def mixed_score(y_hat, y):
-    rounding_decimals = 20
+    rounding_decimals = 10
 
     score = 0
     argmax = 0
