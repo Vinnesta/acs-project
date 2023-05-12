@@ -1,3 +1,4 @@
+from copy import deepcopy
 from enum import Enum
 import numpy as np
 import random
@@ -261,13 +262,13 @@ class ListenerProcess():
         if val_accuracy > best_val_metric:
           best_val_metric = val_accuracy
           best_epoch = epoch + 1
-          best_params = model.state_dict()
+          best_params = deepcopy(model.state_dict())
       else:
         # Track loss as the validation metric
         if best_val_metric == 0 or val_loss < best_val_metric:
           best_val_metric = val_loss
           best_epoch = epoch + 1
-          best_params = model.state_dict()
+          best_params = deepcopy(model.state_dict())
       
       if (epoch+1) % epochs_to_report == 0:
         print(f'[Epoch {epoch+1}] Train Metrics - Loss: {train_loss:.4f}, Accuracy: {train_accuracy:.4f}; Validation Metrics - Loss:{val_loss:.4f}, Accuracy: {val_accuracy:.4f}')
@@ -348,7 +349,7 @@ class SpeakerProcess():
       if gen_accuracy > best_gen_accuracy:
         best_gen_accuracy = gen_accuracy
         best_epoch = epoch + 1
-        best_params = model.state_dict()
+        best_params = deepcopy(model.state_dict())
       
       if (epoch+1) % epochs_to_report == 0:
         print(f'[Epoch {epoch+1}] Metrics - Train Loss: {train_loss:.4f}; L0 Val Accuracy: {gen_accuracy:.4f}')
