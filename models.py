@@ -7,9 +7,10 @@ from torch.nn import Linear, ReLU, Module, Sequential
 from torch.nn.utils.rnn import pack_padded_sequence
 
 class LiteralListener(nn.Module):
-  def __init__(self, embedding_dim, hidden_dim, colour_vector_dim, vocab_size, dropout=0.0):
+  def __init__(self, embedding_dim, hidden_dim, colour_vector_dim, vocab_size, dropout=0.0, clamp_scores=False):
     super(LiteralListener, self).__init__()
     self.colour_vector_dim = colour_vector_dim
+    self.clamp_scores = clamp_scores
 
     self.word_embeddings = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
     self.embedding_dropout = nn.Dropout(p=dropout)
@@ -39,6 +40,8 @@ class LiteralListener(nn.Module):
       delta_t = torch.transpose(delta, dim0=2, dim1=1)
       score = -torch.matmul(torch.matmul(delta_t, cov_matrix), delta)
       score = score.squeeze(dim=-1)
+      if self.clamp_scores:
+        score = score.clamp(max=0)
       scores.append(score)
     return torch.cat(scores, dim=-1)
 
